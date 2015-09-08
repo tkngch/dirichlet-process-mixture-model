@@ -10,7 +10,7 @@
  * approximations to rational models: alternative algorithms for category
  * learning. Psychological Review, 117, 1144–1167.
  */
-
+// Copyright (c) 2015 Takao Noguchi (tkngch@runbox.com)
 
 #include <algorithm>
 #include <functional>
@@ -23,17 +23,14 @@
 
 #include <assert.h>
 
+namespace DPMM {
 
-namespace DPMM
-{
-
-// for comparing double variables. If their difference is less than this value, they are
+// for comparing double variables. If their difference is less than this value,
+// they are
 // treated equal.
 extern const double PRACTICAL_ZERO;
 
-
-namespace Misc
-{
+namespace Misc {
 
 /*
  * Not really part of the model, but handy functions to use with the model.
@@ -41,235 +38,194 @@ namespace Misc
 
 double generate_random_double(void);
 
-void get_unique_values(const std::vector<std::vector<unsigned int>>& objects,
-                       std::vector<std::set<unsigned int>>& unique_values,
-                       std::vector<unsigned int>& n_uniques);
+void get_unique_values(const std::vector<std::vector<unsigned int>> &objects,
+                       std::vector<std::set<unsigned int>> &unique_values,
+                       std::vector<unsigned int> &n_uniques);
 
-}  // namespace Misc
+} // namespace Misc
 
+enum class Approximation_Method {
 
-enum class Approximation_Method
-{
+  local_map,
+  particle_filter
 
-    local_map,
-    particle_filter
+}; // enum class Approximation_Method
 
-};  // enum class Approximation_Method
+class Parameter {
 
+public:
+  Parameter(void){};
 
-class Parameter
-{
+  Parameter(const double coupling_parameter, const std::vector<double> beta,
+            const Approximation_Method approximation_method,
+            const unsigned int n_particles = 1)
+      : c(coupling_parameter), beta(beta),
+        approximation_method(approximation_method), n_particles(n_particles){};
 
-  public:
-    Parameter(void){};
+  Parameter &operator=(const Parameter &p);
 
-    Parameter(const double coupling_parameter, const std::vector<double> beta,
-              const Approximation_Method approximation_method,
-              const unsigned int n_particles = 1)
-        : c(coupling_parameter), beta(beta), approximation_method(approximation_method),
-          n_particles(n_particles){};
+  std::string get_approximation_method_name(void);
 
-    Parameter& operator=(const Parameter& p);
+  double c;
+  std::vector<double> beta;
+  Approximation_Method approximation_method;
+  unsigned int n_particles;
 
-    std::string get_approximation_method_name(void);
+}; // class Parameter
 
-    double c;
-    std::vector<double> beta;
-    Approximation_Method approximation_method;
-    unsigned int n_particles;
+class Cluster {
 
-};  // class Parameter
+public:
+  Cluster(const Parameter &param, const std::vector<unsigned int> &n_uniques);
+  Cluster(const Cluster &c); // to copy class
+  Cluster(Cluster &&c);      // to move class
+  ~Cluster(void);
 
+  Cluster &operator=(const Cluster &c);
+  Cluster &operator=(Cluster &&c);
 
-class Cluster
-{
+  // p(category | cluster)
+  double predict(const std::vector<unsigned int> &object,
+                 const unsigned int dimension_to_be_predicted);
 
-  public:
-    Cluster(const Parameter& param, const std::vector<unsigned int>& n_uniques);
-    Cluster(const Cluster& c);  // to copy class
-    Cluster(Cluster&& c);       // to move class
-    ~Cluster(void);
+  // unnormalised p(cluster | object)
+  double compute_unnormalised_posterior(
+      const unsigned int n_observed, const std::vector<unsigned int> &object,
+      const std::vector<unsigned int> &visible_dimensions);
 
-    Cluster& operator=(const Cluster& c);
-    Cluster& operator=(Cluster&& c);
+  // add an object to cluster
+  void add_object(const std::vector<unsigned int> &object,
+                  const std::vector<unsigned int> &visible_dimensions);
 
-    // p(category | cluster)
-    double predict(const std::vector<unsigned int>& object,
-                   const unsigned int dimension_to_be_predicted);
+  // p(cluster)
+  double compute_prior(const unsigned int n_observed);
 
-    // unnormalised p(cluster | object)
-    double compute_unnormalised_posterior(
-        const unsigned int n_observed, const std::vector<unsigned int>& object,
-        const std::vector<unsigned int>& visible_dimensions);
+  // variables needed to be public for copying
+  unsigned int n_members;
+  // vector of objects in cluster
+  std::vector<std::map<unsigned int, unsigned int>> member_counts;
+  std::vector<unsigned int> n_members_per_dimension;
 
-    // add an object to cluster
-    void add_object(const std::vector<unsigned int>& object,
-                    const std::vector<unsigned int>& visible_dimensions);
+private:
+  const Parameter &parameter;
 
-    // p(cluster)
-    double compute_prior(const unsigned int n_observed);
+  // number of possible values for each dimension
+  const std::vector<unsigned int> &n_uniques;
 
-    // H(object)
-    // Dimensions are assumed independent, so entropy per dimensions are summed.
-    double compute_entropy_object(
-        const std::vector<unsigned int>& visible_dimensions,
-        const std::vector<std::set<unsigned int>>& unique_values);
+  void copy_cluster(const Cluster &c);
 
-    // variables needed to be public for copying
-    unsigned int n_members;
-    // vector of objects in cluster
-    std::vector<std::vector<unsigned int>> members;
+  // p(object | cluster)
+  double
+  compute_likelihood(const std::vector<unsigned int> &object,
+                     const std::vector<unsigned int> &visible_dimensions);
+  double compute_likelihood_one_discrete_feature(
+      const std::vector<unsigned int> &object, const unsigned int dimension);
 
-  private:
-    const Parameter& parameter;
+}; // class Cluster
 
-    // number of possible values for each dimension
-    const std::vector<unsigned int>& n_uniques;
+class Particle {
 
-    // practical nan value for dimension value
-    const unsigned int nanvalue = std::numeric_limits<unsigned int>::max();
+public:
+  Particle(const Parameter &parameter,
+           const std::vector<unsigned int> &n_uniques);
+  Particle(const Particle &p); // copy
+  Particle(Particle &&p);      // move
+  ~Particle();
 
-    void copy_cluster(const Cluster& c);
+  Particle &operator=(const Particle &p); // copy
+  Particle &operator=(Particle &&p);      // move
 
-    // p(object | cluster)
-    double compute_likelihood(const std::vector<unsigned int>& object,
-                              const std::vector<unsigned int>& visible_dimensions);
-    double compute_likelihood_one_discrete_feature(
-        const std::vector<unsigned int>& object, const unsigned int dimension);
+  // predict without assiging an object to a cluster
+  // predictions from each cluster are weighted and averaged
+  double predict(const std::vector<unsigned int> &object,
+                 const std::vector<unsigned int> &visible_dimensions,
+                 const unsigned int dimension_to_be_predicted);
 
-};  // class Cluster
+  // assign an object to a cluster
+  void learn(const std::vector<unsigned int> &object,
+             const std::vector<unsigned int> &visible_dimensions);
 
+  // sum of cluster weights
+  double get_particle_weight(void);
 
-class Particle
-{
+  // variables needed to be public for copying
+  const Parameter &parameter;
+  unsigned int n_observed;
+  std::vector<Cluster> clusters;
+  std::vector<double> cluster_weights;
+  unsigned int n_clusters;
 
-  public:
-    Particle(const Parameter& parameter, const std::vector<unsigned int>& n_uniques);
-    Particle(const Particle& p);  // copy
-    Particle(Particle&& p);       // move
-    ~Particle();
+private:
+  const std::vector<unsigned int> &n_uniques;
 
-    Particle& operator=(const Particle& p);  // copy
-    Particle& operator=(Particle&& p);       // move
+  // index of cluster to which an object is assigned
+  unsigned int winning_cluster;
 
-    // predict without assiging an object to a cluster
-    // predictions from each cluster are weighted and averaged
-    double predict(const std::vector<unsigned int>& object,
-                   const std::vector<unsigned int>& visible_dimensions,
-                   const unsigned int dimension_to_be_predicted);
+  void copy_particle(const Particle &p);
 
-    // assign an object to a cluster
-    void learn(const std::vector<unsigned int>& object,
-               const std::vector<unsigned int>& visible_dimensions);
+  // compute unnormalised posterior for each cluster
+  void
+  compute_cluster_weights(const std::vector<unsigned int> &object,
+                          const std::vector<unsigned int> &visible_dimensions);
 
-    // sum of cluster weights
-    double get_particle_weight(void);
+  // decide which cluster an object is assigned to
+  void find_winner(void);
+  void find_winner_softmax(void); // for particle filter
+  void find_winner_map(void);     // for local map
 
-    // H(cluster | particle)
-    double compute_cluster_entropy(void);
+}; // class Particle
 
-    // compute mutual information, I(object; cluster | particle)
-    double compute_cluster_informativeness(
-        const std::vector<unsigned int>& visible_dimensions,
-        const std::vector<std::set<unsigned int>>& unique_values);
+class Model {
 
-    // variables needed to be public for copying
-    const Parameter& parameter;
-    unsigned int n_observed;
-    std::vector<Cluster> clusters;
-    std::vector<double> cluster_weights;
-    unsigned int n_clusters;
+public:
+  Model(void);
+  Model(const Parameter &parameter, const std::vector<unsigned int> &n_uniques);
+  ~Model();
 
-  private:
-    const std::vector<unsigned int>& n_uniques;
+  // assign an object to a cluster and re-sample particles
+  void learn(const std::vector<unsigned int> &object,
+             const std::vector<unsigned int> &visible_dimensions);
+  void learn(const std::vector<std::vector<unsigned int>> &object,
+             const std::vector<unsigned int> &visible_dimensions);
+  void learn(const std::vector<std::vector<unsigned int>> &object,
+             const std::vector<std::vector<unsigned int>> &visible_dimensions);
 
-    // index of cluster to which an object is assigned
-    unsigned int winning_cluster;
+  // predict without assigning an object to a cluster
+  void predict(const std::vector<unsigned int> &object,
+               const std::vector<unsigned int> &visible_dimensions,
+               const unsigned int dimension_to_be_predicted, double &accuracy);
+  void predict(const std::vector<std::vector<unsigned int>> &objects,
+               const std::vector<unsigned int> &visible_dimensions,
+               const unsigned int dimension_to_be_predicted,
+               std::vector<double> &accuracy);
+  void predict(const std::vector<std::vector<unsigned int>> &objects,
+               const std::vector<unsigned int> &visible_dimensions,
+               const std::vector<unsigned int> &dimension_to_be_predicted,
+               std::vector<double> &accuracy);
 
-    void copy_particle(const Particle& p);
+  // clear out whatever has been learnt
+  void forget(void);
+  // re-set parameter and n_uniques. also forget
+  void reset(const Parameter &new_parameter,
+             const std::vector<unsigned int> &new_n_uniques);
 
-    // compute unnormalised posterior for each cluster
-    void compute_cluster_weights(const std::vector<unsigned int>& object,
-                                 const std::vector<unsigned int>& visible_dimensions);
+  // accessed from test_dmpp
+  std::vector<Particle> particles;
 
-    // decide which cluster an object is assigned to
-    void find_winner(void);
-    void find_winner_softmax(void);  // for particle filter
-    void find_winner_map(void);      // for local map
+  Parameter parameter;
 
-};  // class Particle
+private:
+  std::vector<unsigned int> n_uniques;
 
+  // create particles
+  void initialise_particles(void);
 
-class Model
-{
+  // p(particle | observed objects)
+  std::vector<double> particle_weights;
+  void compute_particle_weights(void);
 
-  public:
-    Model(void);
-    Model(const Parameter& parameter, const std::vector<unsigned int>& n_uniques);
-    ~Model();
+  void resample_particles(void);
 
-    // assign an object to a cluster and re-sample particles
-    void learn(const std::vector<unsigned int>& object,
-               const std::vector<unsigned int>& visible_dimensions);
-    void learn(const std::vector<std::vector<unsigned int>>& object,
-               const std::vector<unsigned int>& visible_dimensions);
-    void learn(const std::vector<std::vector<unsigned int>>& object,
-               const std::vector<std::vector<unsigned int>>& visible_dimensions);
+}; // class Model
 
-    // predict without assigning an object to a cluster
-    void predict(const std::vector<unsigned int>& object,
-                 const std::vector<unsigned int>& visible_dimensions,
-                 const unsigned int dimension_to_be_predicted, double& accuracy);
-    void predict(const std::vector<std::vector<unsigned int>>& objects,
-                 const std::vector<unsigned int>& visible_dimensions,
-                 const unsigned int dimension_to_be_predicted,
-                 std::vector<double>& accuracy);
-    void predict(const std::vector<std::vector<unsigned int>>& objects,
-                 const std::vector<unsigned int>& visible_dimensions,
-                 const std::vector<unsigned int>& dimension_to_be_predicted,
-                 std::vector<double>& accuracy);
-
-    // summary statistics for cluster: n, informativeness, and entropy.
-    //  n: weighted average number of clusters
-    //  informativeness: weighted average of mutual information I(object; entropy)
-    //  entropy: weighted average of entropy H(cluster)
-    void get_cluster_statistics(const std::vector<unsigned int>& visible_dimensions,
-                                const std::vector<std::set<unsigned int>>& unique_values,
-                                std::map<std::string, double>& stats);
-
-    // clear out whatever has been learnt
-    void forget(void);
-    // re-set parameter and n_uniques. also forget
-    void reset(const Parameter& new_parameter,
-               const std::vector<unsigned int>& new_n_uniques);
-
-    // accessed from test_dmpp
-    std::vector<Particle> particles;
-
-    Parameter parameter;
-
-  private:
-    std::vector<unsigned int> n_uniques;
-
-    // create particles
-    void initialise_particles(void);
-
-    // p(particle | observed objects)
-    std::vector<double> particle_weights;
-    void compute_particle_weights(void);
-
-    void resample_particles(void);
-
-    // mean number of clusters
-    double get_n_clusters(void);
-    // I(object; cluster)
-    double get_cluster_informativeness(
-        const std::vector<unsigned int>& visible_dimensions,
-        const std::vector<std::set<unsigned int>>& unique_values);
-    // H(cluster)
-    double get_cluster_entropy(void);
-
-};  // class Model
-
-
-}  // namespace DPMM
+} // namespace DPMM

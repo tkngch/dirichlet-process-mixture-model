@@ -1,7 +1,8 @@
 #!/usr/bin/env Rscript
+# Copyright (c) 2015 Takao Noguchi (tkngch@runbox.com)
 
 library(Rcpp)
-dyn.load("~/wip/dirichlet-process-mixture-model/libdpmm_r.so")
+dyn.load("libdpmm_r.so")
 
 objects <- list(c(0, 0, 0), c(0, 1, 1), c(1, 0, 1), c(1, 1, 0))
 coupling <- 0.3

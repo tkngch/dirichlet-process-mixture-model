@@ -1,3 +1,4 @@
+// Copyright (c) 2015 Takao Noguchi (tkngch@runbox.com)
 
 #include <algorithm>
 #include <iostream>
@@ -19,10 +20,7 @@ RcppExport SEXP predict_and_learn(SEXP objects_, SEXP coupling_, SEXP beta_,
     approx_method = DPMM::Approximation_Method::local_map;
   }
 
-  DPMM::Parameter parameter_for_learning{coupling, beta, approx_method,
-                                         n_particles};
-  DPMM::Parameter parameter_for_prediction = parameter_for_learning;
-  parameter_for_prediction.c = 1.0;  // prevent a new cluster from being created
+  DPMM::Parameter parameter{coupling, beta, approx_method, n_particles};
 
   const std::vector<std::vector<unsigned int>> objects =
       Rcpp::as<std::vector<std::vector<unsigned int>>>(objects_);
@@ -42,17 +40,14 @@ RcppExport SEXP predict_and_learn(SEXP objects_, SEXP coupling_, SEXP beta_,
   const unsigned int dimension_to_be_predicted =
       Rcpp::as<unsigned int>(dimension_to_be_predicted_);
 
-  DPMM::Model model{parameter_for_learning, n_uniques};
+  DPMM::Model model{parameter, n_uniques};
 
   std::vector<double> accuracy;
   accuracy.resize(n_objects);
 
   for (unsigned int i = 0; i < n_objects; i++) {
-    model.parameter = parameter_for_prediction;
     model.predict(objects.at(i), testing_dimensions, dimension_to_be_predicted,
                   accuracy.at(i));
-
-    model.parameter = parameter_for_learning;
     model.learn(objects.at(i), training_dimensions);
   }
 

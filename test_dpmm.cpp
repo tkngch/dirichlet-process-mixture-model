@@ -1,3 +1,4 @@
+// Copyright (c) 2015 Takao Noguchi (tkngch@runbox.com)
 
 #include "test_dpmm.hpp"
 

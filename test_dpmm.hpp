@@ -1,6 +1,7 @@
 /*
  * Test DPMM by replicating what previous studies report.
  */
+// Copyright (c) 2015 Takao Noguchi (tkngch@runbox.com)
 
 #include <iostream>
 #include "dpmm.hpp"
