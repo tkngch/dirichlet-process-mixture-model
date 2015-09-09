@@ -8,19 +8,20 @@ Dirichlet process mixture model with either local MAP or particle filter
 approximations. More details are found in the papers listed below.
 
 - Anderson, J. R. (1991). The adaptive nature of human categorization.
-  Psychological Review, 98, 409-429.
+  *Psychological Review, 98,* 409-429.
 
 - Sanborn, A. N., Griffiths, T. L., & Navarro, D. J. (2010).  Rational
   approximations to rational models: alternative algorithms for category
-  learning. Psychological Review, 117, 1144-1167.
+  learning. *Psychological Review, 117,* 1144-1167.
 
 
 ## Files
 
 - dpmm: main script for the model.
-- main: Example usage of dpmm.
+- main: example usage of dpmm.
 - test_dpmm: simulates the model and compares the results against what has been reported.
-- libdpmm_r: interface for R. Example usage is in script.R
+- libdpmm_r: example interface for R.
+- script.R: shows how to use libdpmm_r.
 
 
 ## Dependencies
